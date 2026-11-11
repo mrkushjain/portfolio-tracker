@@ -1,0 +1,1466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portfolio Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    [x-cloak] { display: none; }
+    .tab-active  { background: #4f46e5; color: #fff; }
+    .tab-inactive{ background: transparent; color: #6b7280; }
+    .tab-inactive:hover { background: #f3f4f6; color: #374151; }
+    .modal-bg { background: rgba(0,0,0,.5); }
+    .badge-buy    { background:#dcfce7; color:#15803d; }
+    .badge-sell   { background:#fee2e2; color:#dc2626; }
+    .badge-pending   { background:#fef3c7; color:#b45309; }
+    .badge-fulfilled { background:#dcfce7; color:#15803d; }
+    .badge-cancelled { background:#f3f4f6; color:#6b7280; }
+    input, select, textarea {
+      border: 1px solid #d1d5db;
+      border-radius: 0.375rem;
+      padding: 0.375rem 0.625rem;
+      font-size: 0.875rem;
+      width: 100%;
+      outline: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: #4f46e5; box-shadow: 0 0 0 2px rgba(79,70,229,.2); }
+    .card { background: #fff; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,.1); padding: 1.25rem; }
+    .btn-primary   { background:#4f46e5; color:#fff; border-radius:.375rem; padding:.375rem .875rem; font-size:.875rem; font-weight:500; cursor:pointer; }
+    .btn-primary:hover { background:#4338ca; }
+    .btn-danger    { background:#dc2626; color:#fff; border-radius:.375rem; padding:.25rem .625rem; font-size:.75rem; cursor:pointer; }
+    .btn-danger:hover  { background:#b91c1c; }
+    .btn-success   { background:#16a34a; color:#fff; border-radius:.375rem; padding:.25rem .625rem; font-size:.75rem; cursor:pointer; }
+    .btn-success:hover { background:#15803d; }
+    .btn-gray      { background:#f3f4f6; color:#374151; border-radius:.375rem; padding:.25rem .625rem; font-size:.75rem; cursor:pointer; border:1px solid #d1d5db; }
+    .btn-gray:hover    { background:#e5e7eb; }
+    .btn-indigo    { background:#4f46e5; color:#fff; border-radius:.375rem; padding:.25rem .625rem; font-size:.75rem; cursor:pointer; }
+    .btn-indigo:hover  { background:#4338ca; }
+    th { background:#f9fafb; font-weight:600; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em; color:#6b7280; padding:.5rem .75rem; text-align:left; }
+    td { padding:.5rem .75rem; font-size:.875rem; color:#374151; border-top:1px solid #f3f4f6; }
+    tr:hover td { background:#fafafa; }
+    .form-label { font-size:.75rem; font-weight:600; color:#374151; margin-bottom:.25rem; display:block; }
+    .pos-green { color:#16a34a; } .neg-red { color:#dc2626; }
+    #toast { transition: all .3s; }
+    .progress-bar { height:8px; border-radius:4px; background:#e5e7eb; overflow:hidden; }
+    .progress-fill { height:100%; border-radius:4px; background:#4f46e5; transition:width .5s; }
+    .spinner { display:inline-block; width:1rem; height:1rem; border:2px solid #e5e7eb; border-top-color:#4f46e5; border-radius:50%; animation:spin .6s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+  </style>
+  <script>
+    tailwind.config = { theme: { extend: {} } };
+  </script>
+</head>
+<body class="bg-gray-50 min-h-screen" style="font-family: system-ui, -apple-system, sans-serif;">
+
+<!-- ══════════════════════════ TOAST ══════════════════════════ -->
+<div id="toast" class="fixed top-4 right-4 z-50 hidden max-w-sm rounded-lg shadow-lg px-4 py-3 text-sm font-medium"></div>
+
+<!-- ══════════════════════════ HEADER ══════════════════════════ -->
+<header class="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
+  <div class="max-w-7xl mx-auto px-4 flex items-center justify-between h-14">
+    <div class="flex items-center gap-2">
+      <span class="text-lg font-bold text-indigo-700">📊 Portfolio Tracker</span>
+    </div>
+    <nav class="flex gap-1">
+      <button onclick="switchTab('dashboard')"  id="tb-dashboard"  class="tab-inactive px-3 py-1.5 rounded-md text-sm font-medium transition-colors">Dashboard</button>
+      <button onclick="switchTab('piggybanks')" id="tb-piggybanks" class="tab-inactive px-3 py-1.5 rounded-md text-sm font-medium transition-colors">🐷 Piggy Banks</button>
+      <button onclick="switchTab('setup')"      id="tb-setup"      class="tab-inactive px-3 py-1.5 rounded-md text-sm font-medium transition-colors">⚙️ Setup</button>
+      <button onclick="switchTab('orders')"     id="tb-orders"     class="tab-inactive px-3 py-1.5 rounded-md text-sm font-medium transition-colors">📋 Orders</button>
+      <button onclick="switchTab('watchlist')"  id="tb-watchlist"  class="tab-inactive px-3 py-1.5 rounded-md text-sm font-medium transition-colors">👁️ Watchlist</button>
+    </nav>
+    <div class="flex items-center gap-2">
+      <button onclick="loadAll(true)" class="btn-gray flex items-center gap-1.5 text-sm">
+        <span id="refresh-icon">↺</span> Refresh
+      </button>
+      <button onclick="openGasUrlModal()" title="Configure GAS URL" class="btn-gray text-sm px-2.5" id="gas-status-btn">⚙</button>
+    </div>
+  </div>
+</header>
+
+<!-- ══════════════════════════ UNCONFIGURED BANNER ══════════════════════════ -->
+<div id="config-banner" class="hidden bg-amber-50 border-b border-amber-200 px-4 py-3 text-sm text-amber-800 text-center cursor-pointer hover:bg-amber-100" onclick="openGasUrlModal()">
+  ⚠️ <strong>Google Apps Script URL not set.</strong> Click here (or the ⚙ button) to enter your Web App URL — no file editing required.
+</div>
+
+<!-- ══════════════════════════ MAIN CONTENT ══════════════════════════ -->
+<main class="max-w-7xl mx-auto px-4 py-6">
+
+  <!-- LOADING -->
+  <div id="loading-overlay" class="hidden text-center py-20">
+    <div class="spinner" style="width:2rem;height:2rem;border-width:3px;"></div>
+    <p class="mt-3 text-gray-500 text-sm">Loading portfolio data…</p>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="panel-dashboard" class="tab-panel"></div>
+
+  <!-- PIGGY BANKS -->
+  <div id="panel-piggybanks" class="tab-panel hidden"></div>
+
+  <!-- SETUP -->
+  <div id="panel-setup" class="tab-panel hidden"></div>
+
+  <!-- ORDERS -->
+  <div id="panel-orders" class="tab-panel hidden"></div>
+
+  <!-- WATCHLIST -->
+  <div id="panel-watchlist" class="tab-panel hidden"></div>
+
+</main>
+
+<!-- ══════════════════════════ MODAL OVERLAY ══════════════════════════ -->
+<div id="modal-overlay" class="modal-bg fixed inset-0 z-50 flex items-center justify-center hidden">
+  <div id="modal-box" class="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-screen overflow-y-auto"></div>
+</div>
+
+<!-- ══════════════════════════ JAVASCRIPT ══════════════════════════ -->
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+//  CONFIGURATION — loaded from localStorage; set via the ⚙ modal at runtime
+// ─────────────────────────────────────────────────────────────────────────────
+const GAS_URL_KEY = 'portfolio_tracker_gas_url';
+let GAS_URL = localStorage.getItem(GAS_URL_KEY) || '';
+
+function gasUrlConfigured() {
+  return GAS_URL && !GAS_URL.includes('YOUR_SCRIPT_ID') && GAS_URL.startsWith('https://');
+}
+
+function openGasUrlModal() {
+  openModal(`
+    <div class="p-5">
+      ${modalHeader('⚙️ Configure Google Apps Script URL')}
+      <p class="text-sm text-gray-600 mb-4">
+        Paste the <strong>Web App URL</strong> from your Apps Script deployment.<br/>
+        It looks like: <code class="text-xs bg-gray-100 px-1 py-0.5 rounded">https://script.google.com/macros/s/…/exec</code>
+      </p>
+      <label class="form-label">Web App URL</label>
+      <input id="m-gas-url" type="url" placeholder="https://script.google.com/macros/s/…/exec"
+        value="${escHtml(GAS_URL)}" />
+      <p class="text-xs text-gray-400 mt-2">Saved to your browser's localStorage — never leaves your device.</p>
+      <div class="flex justify-between items-center mt-5 pt-4 border-t border-gray-100">
+        <button onclick="clearGasUrl()" class="btn-danger text-xs">Clear saved URL</button>
+        <div class="flex gap-2">
+          <button onclick="closeModal()" class="btn-gray">Cancel</button>
+          <button onclick="saveGasUrl()" class="btn-primary">Save & Connect</button>
+        </div>
+      </div>
+    </div>`);
+  setTimeout(() => document.getElementById('m-gas-url')?.select(), 60);
+}
+
+function saveGasUrl() {
+  const val = document.getElementById('m-gas-url').value.trim();
+  if (!val.startsWith('https://script.google.com/macros/s/')) {
+    toast('URL must start with https://script.google.com/macros/s/', 'error');
+    return;
+  }
+  GAS_URL = val;
+  localStorage.setItem(GAS_URL_KEY, val);
+  closeModal();
+  updateGasStatusIndicator();
+  document.getElementById('config-banner').classList.add('hidden');
+  toast('URL saved — loading data…');
+  loadAll();
+}
+
+function clearGasUrl() {
+  if (!confirm('Clear the saved URL? The app will stop working until a new URL is entered.')) return;
+  GAS_URL = '';
+  localStorage.removeItem(GAS_URL_KEY);
+  closeModal();
+  updateGasStatusIndicator();
+  document.getElementById('config-banner').classList.remove('hidden');
+  toast('URL cleared', 'error');
+}
+
+function updateGasStatusIndicator() {
+  const btn = document.getElementById('gas-status-btn');
+  if (!btn) return;
+  if (gasUrlConfigured()) {
+    btn.title = 'Connected — click to change URL';
+    btn.style.color = '#16a34a';
+  } else {
+    btn.title = 'GAS URL not set — click to configure';
+    btn.style.color = '#dc2626';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────────────────────────────────────
+const state = {
+  accounts:   [],
+  brokers:    [],
+  cash:       [],
+  holdings:   [],
+  piggyBanks: [],
+  goalAllocs: [],
+  orders:     [],
+  watchlist:  [],
+  prices:     {},
+  currentTab: 'dashboard',
+};
+
+let dashboardChart = null;
+let pnlChart       = null;
+let _orderFilters  = { account: '', broker: '', status: '', type: '' };
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  UTILITIES
+// ─────────────────────────────────────────────────────────────────────────────
+function fmt(amount, currency) {
+  if (amount == null || isNaN(amount)) return '—';
+  const n = parseFloat(amount);
+  if (currency === 'INR') return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtN(n, digits = 2) { return parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits }); }
+function fmtPct(n)   { return (n == null ? '—' : (n > 0 ? '+' : '') + parseFloat(n).toFixed(2) + '%'); }
+function pnlClass(n) { return parseFloat(n) >= 0 ? 'pos-green' : 'neg-red'; }
+function escHtml(s)  { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.className = `fixed top-4 right-4 z-50 max-w-sm rounded-lg shadow-lg px-4 py-3 text-sm font-medium ${
+    type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+  }`;
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 3500);
+}
+
+function getBroker(id)   { return state.brokers.find(b => b.id === id); }
+function getAccount(id)  { return state.accounts.find(a => a.id === id); }
+function getCash(bid)    { const c = state.cash.find(c => c.broker_id === bid); return c ? parseFloat(c.balance) : 0; }
+function getHoldings(bid){ return state.holdings.filter(h => h.broker_id === bid); }
+function getPB(id)       { return state.piggyBanks.find(p => p.id === id); }
+function getPBAllocs(pbId){ return state.goalAllocs.filter(a => a.piggy_bank_id === pbId); }
+function brokerCurrency(bid){ const b = getBroker(bid); return b ? b.currency : 'USD'; }
+
+function holdingPrice(sym) {
+  const p = state.prices[sym];
+  return p ? p.price : null;
+}
+function holdingValue(h) {
+  const p = holdingPrice(h.symbol);
+  return p != null ? p * parseFloat(h.quantity) : parseFloat(h.quantity) * parseFloat(h.avg_cost);
+}
+
+function totalPortfolioValue() {
+  let usd = 0, inr = 0;
+  state.holdings.forEach(h => {
+    const v = holdingValue(h);
+    if (brokerCurrency(h.broker_id) === 'INR') inr += v; else usd += v;
+  });
+  state.cash.forEach(c => {
+    const bal = parseFloat(c.balance) || 0;
+    if (brokerCurrency(c.broker_id) === 'INR') inr += bal; else usd += bal;
+  });
+  return { usd, inr };
+}
+
+function totalRealizedPnl() {
+  return state.orders
+    .filter(o => o.status === 'Fulfilled' && o.order_type === 'SELL')
+    .reduce((s, o) => s + (parseFloat(o.realized_pnl) || 0), 0);
+}
+
+function allocatedQty(brokerId, symbol, excludePBId) {
+  return state.goalAllocs
+    .filter(a => a.broker_id === brokerId && a.symbol === symbol && a.piggy_bank_id !== excludePBId)
+    .reduce((s, a) => s + (parseFloat(a.quantity) || 0), 0);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  API CLIENT
+// ─────────────────────────────────────────────────────────────────────────────
+async function apiGet(action, extraParams = {}) {
+  if (!gasUrlConfigured()) throw new Error('GAS URL not configured — click ⚙ to set it');
+  const url = new URL(GAS_URL);
+  url.searchParams.set('action', action);
+  Object.entries(extraParams).forEach(([k,v]) => url.searchParams.set(k, v));
+  const res = await fetch(url.toString(), { redirect: 'follow', mode: 'cors' });
+  return res.json();
+}
+
+async function apiPost(data) {
+  if (!gasUrlConfigured()) throw new Error('GAS URL not configured — click ⚙ to set it');
+  // Send as GET with ?payload=JSON to avoid the POST→redirect CORS issue.
+  // GAS 302-redirects POST /exec to a different origin; browsers block that
+  // in cors mode. A plain GET is a simple request — no preflight, no redirect
+  // issue — and doGet routes it via dispatchWrite() when payload is present.
+  const url = new URL(GAS_URL);
+  url.searchParams.set('payload', JSON.stringify(data));
+  const res = await fetch(url.toString(), { redirect: 'follow' });
+  return res.json();
+}
+
+async function loadAll(showToast = false) {
+  const icon = document.getElementById('refresh-icon');
+  icon.innerHTML = '<span class="spinner"></span>';
+  document.getElementById('loading-overlay').classList.remove('hidden');
+  hideAllPanels();
+  try {
+    const r = await apiGet('getAll');
+    if (!r.success) throw new Error(r.error);
+    Object.assign(state, r.data);
+    if (showToast) toast('Portfolio refreshed');
+  } catch (e) {
+    toast('Load error: ' + e.message, 'error');
+  } finally {
+    icon.textContent = '↺';
+    document.getElementById('loading-overlay').classList.add('hidden');
+    renderCurrentTab();
+  }
+}
+
+async function loadPrices() {
+  try {
+    const r = await apiGet('getPortfolioPrices');
+    if (r.success) { state.prices = r.data; renderCurrentTab(); }
+  } catch(e) { /* prices are optional */ }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  TAB MANAGEMENT
+// ─────────────────────────────────────────────────────────────────────────────
+function hideAllPanels() {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+}
+
+function switchTab(tab) {
+  state.currentTab = tab;
+  hideAllPanels();
+  document.querySelectorAll('nav button').forEach(b => { b.className = b.className.replace('tab-active','tab-inactive'); });
+  document.getElementById('panel-' + tab).classList.remove('hidden');
+  const btn = document.getElementById('tb-' + tab);
+  if (btn) btn.className = btn.className.replace('tab-inactive','tab-active');
+  renderCurrentTab();
+}
+
+function renderCurrentTab() {
+  const renders = {
+    dashboard:  renderDashboard,
+    piggybanks: renderPiggyBanks,
+    setup:      renderSetup,
+    orders:     renderOrders,
+    watchlist:  renderWatchlist,
+  };
+  const fn = renders[state.currentTab];
+  if (fn) fn();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  DASHBOARD
+// ─────────────────────────────────────────────────────────────────────────────
+function renderDashboard() {
+  const { usd, inr } = totalPortfolioValue();
+  const pnl = totalRealizedPnl();
+  const totalCashUSD = state.cash.filter(c => brokerCurrency(c.broker_id)==='USD').reduce((s,c)=>s+parseFloat(c.balance||0),0);
+  const totalCashINR = state.cash.filter(c => brokerCurrency(c.broker_id)==='INR').reduce((s,c)=>s+parseFloat(c.balance||0),0);
+  const investedUSD = usd - totalCashUSD;
+  const investedINR = inr - totalCashINR;
+
+  // Build per-broker table data
+  const brokerRows = state.brokers.map(b => {
+    const cash = getCash(b.id);
+    const hlds = getHoldings(b.id);
+    const inv  = hlds.reduce((s,h) => s + holdingValue(h), 0);
+    const total = cash + inv;
+    const acc   = getAccount(b.account_id);
+    return { broker: b, account: acc, cash, invested: inv, total };
+  });
+
+  // Build holdings overview
+  const holdingRows = state.holdings.map(h => {
+    const b    = getBroker(h.broker_id);
+    const acc  = b ? getAccount(b.account_id) : null;
+    const qty  = parseFloat(h.quantity);
+    const avg  = parseFloat(h.avg_cost);
+    const curr = b ? b.currency : 'USD';
+    const price = holdingPrice(h.symbol);
+    const value = price != null ? price * qty : avg * qty;
+    const unrlzd = price != null ? (price - avg) * qty : null;
+    return { h, b, acc, qty, avg, curr, price, value, unrlzd };
+  });
+
+  document.getElementById('panel-dashboard').innerHTML = `
+    <div class="space-y-6">
+      <!-- Stat Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="card">
+          <p class="text-xs text-gray-500 font-medium uppercase tracking-wide">Total Portfolio (USD)</p>
+          <p class="text-2xl font-bold text-gray-900 mt-1">${fmt(usd,'USD')}</p>
+          ${inr > 0 ? `<p class="text-sm text-gray-500 mt-0.5">${fmt(inr,'INR')} INR</p>` : ''}
+        </div>
+        <div class="card">
+          <p class="text-xs text-gray-500 font-medium uppercase tracking-wide">Total Cash</p>
+          <p class="text-2xl font-bold text-gray-900 mt-1">${fmt(totalCashUSD,'USD')}</p>
+          ${totalCashINR > 0 ? `<p class="text-sm text-gray-500 mt-0.5">${fmt(totalCashINR,'INR')}</p>` : ''}
+        </div>
+        <div class="card">
+          <p class="text-xs text-gray-500 font-medium uppercase tracking-wide">Total Invested</p>
+          <p class="text-2xl font-bold text-indigo-700 mt-1">${fmt(investedUSD,'USD')}</p>
+          ${investedINR > 0 ? `<p class="text-sm text-gray-500 mt-0.5">${fmt(investedINR,'INR')}</p>` : ''}
+        </div>
+        <div class="card">
+          <p class="text-xs text-gray-500 font-medium uppercase tracking-wide">Realized P&L</p>
+          <p class="text-2xl font-bold mt-1 ${pnlClass(pnl)}">${pnl >= 0 ? '+' : ''}${fmt(pnl,'USD')}</p>
+          <p class="text-xs text-gray-400 mt-0.5">Fulfilled sell orders</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Portfolio by Broker -->
+        <div class="card lg:col-span-2">
+          <h2 class="text-sm font-semibold text-gray-700 mb-3">Portfolio by Broker</h2>
+          ${brokerRows.length === 0 ? '<p class="text-sm text-gray-400 text-center py-4">No brokers configured yet — go to Setup.</p>' : `
+          <table class="w-full">
+            <thead><tr><th>Account</th><th>Broker</th><th>Currency</th><th class="text-right">Cash</th><th class="text-right">Invested</th><th class="text-right">Total</th></tr></thead>
+            <tbody>
+              ${brokerRows.map(r => `
+                <tr>
+                  <td>${escHtml(r.account?.name || '—')}</td>
+                  <td class="font-medium">${escHtml(r.broker.name)}</td>
+                  <td><span class="text-xs font-semibold px-2 py-0.5 rounded-full ${r.broker.currency==='USD'?'bg-blue-100 text-blue-700':'bg-orange-100 text-orange-700'}">${r.broker.currency}</span></td>
+                  <td class="text-right">${fmt(r.cash, r.broker.currency)}</td>
+                  <td class="text-right">${fmt(r.invested, r.broker.currency)}</td>
+                  <td class="text-right font-semibold">${fmt(r.total, r.broker.currency)}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>`}
+        </div>
+
+        <!-- Chart -->
+        <div class="card flex flex-col">
+          <h2 class="text-sm font-semibold text-gray-700 mb-3">Allocation by Broker</h2>
+          <div class="flex-1 flex items-center justify-center" style="min-height:180px;">
+            <canvas id="broker-chart" style="max-height:200px;"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Holdings Overview -->
+      <div class="card">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-gray-700">Holdings Overview</h2>
+          <button onclick="loadPrices()" class="btn-gray text-xs">📡 Fetch Live Prices</button>
+        </div>
+        ${holdingRows.length === 0 ? '<p class="text-sm text-gray-400 text-center py-4">No holdings yet.</p>' : `
+        <table class="w-full">
+          <thead><tr><th>Symbol</th><th>Account / Broker</th><th class="text-right">Qty</th><th class="text-right">Avg Cost</th><th class="text-right">Live Price</th><th class="text-right">Market Value</th><th class="text-right">Unrealized P&L</th></tr></thead>
+          <tbody>
+            ${holdingRows.map(r => `
+              <tr>
+                <td class="font-semibold text-indigo-700">${escHtml(r.h.symbol)}</td>
+                <td class="text-xs text-gray-500">${escHtml(r.acc?.name||'?')} / ${escHtml(r.b?.name||'?')}</td>
+                <td class="text-right">${fmtN(r.qty, 4)}</td>
+                <td class="text-right">${fmt(r.avg, r.curr)}</td>
+                <td class="text-right">${r.price != null ? fmt(r.price, r.curr) : '<span class="text-gray-400 text-xs">—</span>'}</td>
+                <td class="text-right font-medium">${fmt(r.value, r.curr)}</td>
+                <td class="text-right ${r.unrlzd != null ? pnlClass(r.unrlzd) : 'text-gray-400'}">${r.unrlzd != null ? (r.unrlzd>=0?'+':'')+fmt(r.unrlzd, r.curr) : '—'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`}
+      </div>
+
+      <!-- P&L by Stock -->
+      ${buildPnlSection()}
+    </div>`;
+
+  // Render Chart.js broker allocation donut
+  renderBrokerChart(brokerRows);
+}
+
+function buildPnlSection() {
+  const sells = state.orders.filter(o => o.status === 'Fulfilled' && o.order_type === 'SELL');
+  if (sells.length === 0) return '';
+  const byStock = {};
+  sells.forEach(o => {
+    const sym = o.symbol;
+    if (!byStock[sym]) byStock[sym] = 0;
+    byStock[sym] += parseFloat(o.realized_pnl) || 0;
+  });
+  const entries = Object.entries(byStock).sort((a,b) => b[1]-a[1]);
+  return `
+    <div class="card">
+      <h2 class="text-sm font-semibold text-gray-700 mb-3">Realized P&L by Stock</h2>
+      <div style="max-height:240px"><canvas id="pnl-chart"></canvas></div>
+    </div>`;
+}
+
+function renderBrokerChart(brokerRows) {
+  const ctx = document.getElementById('broker-chart');
+  if (!ctx) return;
+  if (dashboardChart) { dashboardChart.destroy(); dashboardChart = null; }
+  const labels = brokerRows.map(r => r.broker.name);
+  const data   = brokerRows.map(r => Math.max(0, r.total));
+  if (data.every(v => v === 0)) return;
+  const COLORS = ['#4f46e5','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#f97316','#06b6d4'];
+  dashboardChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: COLORS, borderWidth: 2, borderColor: '#fff' }] },
+    options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 8 } } } }
+  });
+
+  // P&L chart
+  const pnlCtx = document.getElementById('pnl-chart');
+  if (!pnlCtx) return;
+  if (pnlChart) { pnlChart.destroy(); pnlChart = null; }
+  const sells = state.orders.filter(o => o.status==='Fulfilled' && o.order_type==='SELL');
+  if (!sells.length) return;
+  const byStock = {};
+  sells.forEach(o => { byStock[o.symbol] = (byStock[o.symbol]||0) + (parseFloat(o.realized_pnl)||0); });
+  const syms = Object.keys(byStock);
+  const vals = syms.map(s => byStock[s]);
+  pnlChart = new Chart(pnlCtx, {
+    type: 'bar',
+    data: { labels: syms, datasets: [{ label: 'Realized P&L ($)', data: vals,
+      backgroundColor: vals.map(v => v >= 0 ? 'rgba(22,163,74,.7)' : 'rgba(220,38,38,.7)') }] },
+    options: { responsive: true, plugins: { legend: { display: false } },
+      scales: { y: { ticks: { callback: v => '$' + v.toFixed(0) } } } }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  PIGGY BANKS
+// ─────────────────────────────────────────────────────────────────────────────
+function renderPiggyBanks() {
+  if (state.piggyBanks.length === 0) {
+    document.getElementById('panel-piggybanks').innerHTML = `
+      <div class="text-center py-16">
+        <div class="text-5xl mb-4">🐷</div>
+        <h2 class="text-xl font-semibold text-gray-700 mb-2">No Piggy Banks yet</h2>
+        <p class="text-gray-500 mb-4">Create goal-based buckets in the Setup tab to start allocating stocks.</p>
+        <button onclick="switchTab('setup')" class="btn-primary">Go to Setup</button>
+      </div>`;
+    return;
+  }
+
+  const cards = state.piggyBanks.map(pb => {
+    const allocs = getPBAllocs(pb.id);
+    const goal = parseFloat(pb.goal_amount) || 0;
+    const curr = pb.currency || 'USD';
+
+    // Calculate current market value of allocated stocks
+    let currentVal = 0;
+    allocs.forEach(a => {
+      const price = holdingPrice(a.symbol) ?? parseFloat(state.holdings.find(h=>h.broker_id===a.broker_id&&h.symbol===a.symbol)?.avg_cost ?? 0);
+      currentVal += price * parseFloat(a.quantity);
+    });
+
+    const pct = goal > 0 ? Math.min(100, (currentVal / goal) * 100) : 0;
+
+    const allocTable = allocs.length > 0 ? `
+      <table class="w-full mt-2">
+        <thead><tr><th>Symbol</th><th>Broker</th><th class="text-right">Shares</th><th class="text-right">Est. Value</th></tr></thead>
+        <tbody>
+          ${allocs.map(a => {
+            const b = getBroker(a.broker_id);
+            const price = holdingPrice(a.symbol);
+            const val = price ? price * parseFloat(a.quantity) : null;
+            return `<tr>
+              <td class="font-semibold text-indigo-700">${escHtml(a.symbol)}</td>
+              <td class="text-xs text-gray-500">${escHtml(b?.name||'?')}</td>
+              <td class="text-right">${fmtN(a.quantity,4)}</td>
+              <td class="text-right">${val != null ? fmt(val, b?.currency||'USD') : '<span class="text-gray-400">—</span>'}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>` : '<p class="text-xs text-gray-400 mt-2">No stocks allocated yet.</p>';
+
+    return `
+      <div class="card">
+        <div class="flex items-start justify-between">
+          <div>
+            <h3 class="font-semibold text-gray-900">${escHtml(pb.name)}</h3>
+            ${pb.description ? `<p class="text-xs text-gray-500 mt-0.5">${escHtml(pb.description)}</p>` : ''}
+          </div>
+          <div class="flex gap-2">
+            <button onclick="openAllocModal('${escHtml(pb.id)}')" class="btn-indigo text-xs">+ Allocate</button>
+            <button onclick="deletePiggyBank('${escHtml(pb.id)}')" class="btn-danger">✕</button>
+          </div>
+        </div>
+        ${goal > 0 ? `
+          <div class="mt-3">
+            <div class="flex justify-between text-xs text-gray-500 mb-1">
+              <span>${fmt(currentVal, curr)}</span>
+              <span>Goal: ${fmt(goal, curr)}</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${pct.toFixed(1)}%"></div></div>
+            <p class="text-xs text-gray-400 mt-1">${pct.toFixed(1)}% of goal</p>
+          </div>` : `<p class="text-xs text-gray-400 mt-2">Est. value: ${fmt(currentVal, curr)}</p>`}
+        ${allocTable}
+      </div>`;
+  }).join('');
+
+  document.getElementById('panel-piggybanks').innerHTML = `
+    <div class="flex items-center justify-between mb-4">
+      <h1 class="text-xl font-bold text-gray-800">🐷 Virtual Piggy Banks</h1>
+      <button onclick="openPiggyBankModal()" class="btn-primary">+ New Piggy Bank</button>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">${cards}</div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  SETUP
+// ─────────────────────────────────────────────────────────────────────────────
+function renderSetup() {
+  const accountOptions  = state.accounts.map(a => `<option value="${escHtml(a.id)}">${escHtml(a.name)}</option>`).join('');
+  const brokerOptions   = state.brokers.map(b => {
+    const acc = getAccount(b.account_id);
+    return `<option value="${escHtml(b.id)}">${escHtml(acc?.name||'?')} — ${escHtml(b.name)} (${b.currency})</option>`;
+  }).join('');
+
+  const accountRows = state.accounts.map(a => `
+    <tr>
+      <td class="font-medium">${escHtml(a.name)}</td>
+      <td class="text-xs text-gray-400">${new Date(a.created_at).toLocaleDateString()}</td>
+      <td><button onclick="deleteAccount('${escHtml(a.id)}')" class="btn-danger">✕ Delete</button></td>
+    </tr>`).join('');
+
+  const brokerRows = state.brokers.map(b => {
+    const acc  = getAccount(b.account_id);
+    const cash = getCash(b.id);
+    return `
+    <tr>
+      <td class="font-medium">${escHtml(b.name)}</td>
+      <td>${escHtml(acc?.name||'—')}</td>
+      <td><span class="text-xs font-semibold px-2 py-0.5 rounded-full ${b.currency==='USD'?'bg-blue-100 text-blue-700':'bg-orange-100 text-orange-700'}">${b.currency}</span></td>
+      <td class="text-right">${fmt(cash, b.currency)}</td>
+      <td class="flex gap-1">
+        <button onclick="openSetCashModal('${escHtml(b.id)}')" class="btn-gray">Set Cash</button>
+        <button onclick="deleteBroker('${escHtml(b.id)}')" class="btn-danger">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const holdingRows = state.holdings.map(h => {
+    const b = getBroker(h.broker_id);
+    const acc = b ? getAccount(b.account_id) : null;
+    return `
+    <tr>
+      <td class="font-semibold text-indigo-700">${escHtml(h.symbol)}</td>
+      <td class="text-xs text-gray-500">${escHtml(acc?.name||'?')} / ${escHtml(b?.name||'?')}</td>
+      <td class="text-right">${fmtN(h.quantity, 4)}</td>
+      <td class="text-right">${fmt(h.avg_cost, b?.currency||'USD')}</td>
+      <td><button onclick="deleteHolding('${escHtml(h.id)}')" class="btn-danger">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  const pbRows = state.piggyBanks.map(pb => {
+    const allocCount = state.goalAllocs.filter(a=>a.piggy_bank_id===pb.id).length;
+    return `
+    <tr>
+      <td class="font-medium">${escHtml(pb.name)}</td>
+      <td class="text-xs text-gray-500">${escHtml(pb.description||'—')}</td>
+      <td><span class="text-xs font-semibold px-2 py-0.5 rounded-full ${pb.currency==='USD'?'bg-blue-100 text-blue-700':'bg-orange-100 text-orange-700'}">${pb.currency}</span></td>
+      <td>${pb.goal_amount > 0 ? fmt(pb.goal_amount, pb.currency) : '—'}</td>
+      <td class="text-center">${allocCount}</td>
+      <td><button onclick="deletePiggyBank('${escHtml(pb.id)}')" class="btn-danger">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('panel-setup').innerHTML = `
+    <div class="space-y-6">
+      <h1 class="text-xl font-bold text-gray-800">⚙️ Setup</h1>
+
+      <!-- Two-column: Accounts + Brokers -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- ACCOUNTS -->
+        <div class="card">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-semibold text-gray-800">👤 Account Profiles</h2>
+            <button onclick="openAccountModal()" class="btn-primary text-xs">+ Add Account</button>
+          </div>
+          ${state.accounts.length === 0 ? '<p class="text-sm text-gray-400 text-center py-4">No accounts yet.</p>' : `
+          <table class="w-full">
+            <thead><tr><th>Name</th><th>Created</th><th></th></tr></thead>
+            <tbody>${accountRows}</tbody>
+          </table>`}
+        </div>
+
+        <!-- BROKERS -->
+        <div class="card">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-semibold text-gray-800">🏦 Brokers / Platforms</h2>
+            <button onclick="openBrokerModal()" class="btn-primary text-xs" ${state.accounts.length===0?'disabled title="Add an account first"':''}>+ Add Broker</button>
+          </div>
+          ${state.brokers.length === 0 ? '<p class="text-sm text-gray-400 text-center py-4">No brokers yet.</p>' : `
+          <table class="w-full">
+            <thead><tr><th>Broker</th><th>Account</th><th>Currency</th><th class="text-right">Cash</th><th></th></tr></thead>
+            <tbody>${brokerRows}</tbody>
+          </table>`}
+        </div>
+      </div>
+
+      <!-- INITIAL HOLDINGS -->
+      <div class="card">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-semibold text-gray-800">📦 Initial Holdings</h2>
+          <button onclick="openHoldingModal()" class="btn-primary text-xs" ${state.brokers.length===0?'disabled title="Add a broker first"':''}>+ Add Holding</button>
+        </div>
+        <p class="text-xs text-gray-500 mb-3">Use this to seed pre-existing positions. For ongoing trades, use the Orders tab.</p>
+        ${state.holdings.length === 0 ? '<p class="text-sm text-gray-400 text-center py-4">No holdings recorded.</p>' : `
+        <table class="w-full">
+          <thead><tr><th>Symbol</th><th>Broker</th><th class="text-right">Qty</th><th class="text-right">Avg Cost</th><th></th></tr></thead>
+          <tbody>${holdingRows}</tbody>
+        </table>`}
+      </div>
+
+      <!-- PIGGY BANKS -->
+      <div class="card">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-semibold text-gray-800">🐷 Virtual Piggy Banks / Goals</h2>
+          <button onclick="openPiggyBankModal()" class="btn-primary text-xs">+ New Piggy Bank</button>
+        </div>
+        ${state.piggyBanks.length === 0 ? '<p class="text-sm text-gray-400 text-center py-4">No piggy banks yet.</p>' : `
+        <table class="w-full">
+          <thead><tr><th>Name</th><th>Description</th><th>Currency</th><th>Goal Amount</th><th class="text-center">Allocs</th><th></th></tr></thead>
+          <tbody>${pbRows}</tbody>
+        </table>`}
+      </div>
+    </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ORDERS
+// ─────────────────────────────────────────────────────────────────────────────
+function renderOrders() {
+  let orders = [...state.orders].sort((a,b) => new Date(b.created_at)-new Date(a.created_at));
+
+  // Apply filters
+  if (_orderFilters.account) orders = orders.filter(o => o.account_id === _orderFilters.account);
+  if (_orderFilters.broker)  orders = orders.filter(o => o.broker_id  === _orderFilters.broker);
+  if (_orderFilters.status)  orders = orders.filter(o => o.status     === _orderFilters.status);
+  if (_orderFilters.type)    orders = orders.filter(o => o.order_type === _orderFilters.type);
+
+  const accOpts   = state.accounts.map(a => `<option value="${escHtml(a.id)}" ${_orderFilters.account===a.id?'selected':''}>${escHtml(a.name)}</option>`).join('');
+  const brkOpts   = state.brokers.map(b => `<option value="${escHtml(b.id)}" ${_orderFilters.broker===b.id?'selected':''}>${escHtml(b.name)}</option>`).join('');
+
+  const orderRows = orders.map(o => {
+    const acc = getAccount(o.account_id);
+    const brk = getBroker(o.broker_id);
+    const pb  = o.piggy_bank_id ? getPB(o.piggy_bank_id) : null;
+    const statusBadge = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full badge-${o.status.toLowerCase()}">${o.status}</span>`;
+    const typeBadge   = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full badge-${o.order_type.toLowerCase()}">${o.order_type}</span>`;
+    const actions = o.status === 'Pending' ? `
+      <div class="flex gap-1">
+        <button onclick="fulfillOrder('${escHtml(o.id)}')" class="btn-success text-xs">✓ Fulfill</button>
+        <button onclick="cancelOrder('${escHtml(o.id)}')" class="btn-gray text-xs">✕ Cancel</button>
+      </div>` : o.status === 'Fulfilled' && o.order_type === 'BUY' ? `
+      <button onclick="openBookStockModal('${escHtml(o.id)}')" class="btn-indigo text-xs">📖 Book Stock</button>` : '';
+
+    return `
+      <tr>
+        <td class="text-xs text-gray-400">${new Date(o.created_at).toLocaleDateString()}</td>
+        <td class="font-semibold text-indigo-700">${escHtml(o.symbol)}</td>
+        <td>${typeBadge}</td>
+        <td class="text-xs">${escHtml(o.exec_type)}</td>
+        <td class="text-right">${fmtN(o.quantity, 4)}</td>
+        <td class="text-right">${fmt(o.price, brk?.currency||'USD')}</td>
+        <td class="text-right">${fmt(o.fees, brk?.currency||'USD')}</td>
+        <td class="text-right font-medium">${fmt(o.net_total, brk?.currency||'USD')}</td>
+        <td class="text-xs text-gray-500">${escHtml(acc?.name||'?')} / ${escHtml(brk?.name||'?')}</td>
+        <td>${statusBadge}</td>
+        <td class="text-xs ${pnlClass(o.realized_pnl)}">${o.realized_pnl !== '' && o.realized_pnl != null ? (o.realized_pnl>=0?'+':'')+fmt(o.realized_pnl,brk?.currency||'USD') : '—'}</td>
+        <td class="text-xs text-gray-400">${pb ? `<span title="${escHtml(pb.name)}" class="cursor-help">🐷</span>` : ''}</td>
+        <td>
+          ${actions}
+          <button onclick="deleteOrder('${escHtml(o.id)}')" class="btn-danger mt-1 text-xs">🗑</button>
+        </td>
+      </tr>`;
+  }).join('');
+
+  document.getElementById('panel-orders').innerHTML = `
+    <div class="space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h1 class="text-xl font-bold text-gray-800">📋 Orders</h1>
+        <button onclick="openOrderModal()" class="btn-primary" ${state.brokers.length===0?'disabled':''}>+ New Order</button>
+      </div>
+
+      <!-- Filters -->
+      <div class="card py-3">
+        <div class="flex flex-wrap gap-3 items-center">
+          <span class="text-xs font-semibold text-gray-500 uppercase">Filter:</span>
+          <select style="width:auto" onchange="_orderFilters.account=this.value;renderOrders()">
+            <option value="">All Accounts</option>${accOpts}
+          </select>
+          <select style="width:auto" onchange="_orderFilters.broker=this.value;renderOrders()">
+            <option value="">All Brokers</option>${brkOpts}
+          </select>
+          <select style="width:auto" onchange="_orderFilters.status=this.value;renderOrders()">
+            <option value="">All Status</option>
+            <option value="Pending"   ${_orderFilters.status==='Pending'?'selected':''}>Pending</option>
+            <option value="Fulfilled" ${_orderFilters.status==='Fulfilled'?'selected':''}>Fulfilled</option>
+            <option value="Cancelled" ${_orderFilters.status==='Cancelled'?'selected':''}>Cancelled</option>
+          </select>
+          <select style="width:auto" onchange="_orderFilters.type=this.value;renderOrders()">
+            <option value="">BUY + SELL</option>
+            <option value="BUY"  ${_orderFilters.type==='BUY'?'selected':''}>BUY only</option>
+            <option value="SELL" ${_orderFilters.type==='SELL'?'selected':''}>SELL only</option>
+          </select>
+          <button onclick="_orderFilters={account:'',broker:'',status:'',type:''};renderOrders()" class="btn-gray text-xs">Clear</button>
+        </div>
+      </div>
+
+      <!-- Orders Table -->
+      <div class="card overflow-x-auto">
+        ${orders.length === 0 ? '<p class="text-sm text-gray-400 text-center py-4">No orders found.</p>' : `
+        <table class="w-full whitespace-nowrap">
+          <thead><tr>
+            <th>Date</th><th>Symbol</th><th>Type</th><th>Exec</th>
+            <th class="text-right">Qty</th><th class="text-right">Price</th><th class="text-right">Fees</th><th class="text-right">Net Total</th>
+            <th>Account/Broker</th><th>Status</th><th class="text-right">P&L</th><th>Goal</th><th>Actions</th>
+          </tr></thead>
+          <tbody>${orderRows}</tbody>
+        </table>`}
+      </div>
+    </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  WATCHLIST
+// ─────────────────────────────────────────────────────────────────────────────
+let _watchlistPrices = {};
+let _watchlistLoading = false;
+
+function renderWatchlist() {
+  const rows = state.watchlist.map(w => {
+    const p = _watchlistPrices[w.symbol];
+    const hasPrice = p && p.price != null;
+    const myHolding = state.holdings.find(h => h.symbol === w.symbol);
+    const changeCls = hasPrice && p.change_pct >= 0 ? 'pos-green' : 'neg-red';
+    return `
+      <tr>
+        <td class="font-semibold text-indigo-700">${escHtml(w.symbol)}</td>
+        <td class="text-gray-500">${hasPrice ? escHtml(p.name||w.symbol) : '—'}</td>
+        <td class="text-right font-semibold">${hasPrice ? '$'+fmtN(p.price) : '<span class="text-gray-400">—</span>'}</td>
+        <td class="text-right ${changeCls}">${hasPrice ? fmtPct(p.change_pct) : '—'}</td>
+        <td class="text-right text-xs text-gray-400">${hasPrice && p.open ? '$'+fmtN(p.open) : '—'}</td>
+        <td class="text-right text-xs text-gray-400">${hasPrice && p.high ? '$'+fmtN(p.high) : '—'}</td>
+        <td class="text-right text-xs text-gray-400">${hasPrice && p.low  ? '$'+fmtN(p.low)  : '—'}</td>
+        <td class="text-right">${myHolding ? `<span class="text-xs font-semibold text-indigo-600">${fmtN(myHolding.quantity,4)} shares</span>` : '<span class="text-gray-300 text-xs">—</span>'}</td>
+        <td class="text-xs text-gray-400">${escHtml(w.notes||'')}</td>
+        <td><button onclick="removeWatchlist('${escHtml(w.id)}')" class="btn-danger">✕</button></td>
+      </tr>`;
+  }).join('');
+
+  document.getElementById('panel-watchlist').innerHTML = `
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h1 class="text-xl font-bold text-gray-800">👁️ Watchlist</h1>
+        <button onclick="fetchWatchlistPrices()" class="btn-gray flex items-center gap-1.5" ${_watchlistLoading?'disabled':''}>
+          ${_watchlistLoading ? '<span class="spinner"></span>' : '📡'} Fetch Prices
+        </button>
+      </div>
+
+      <!-- Add Symbol -->
+      <div class="card">
+        <h2 class="text-sm font-semibold text-gray-700 mb-3">Add Symbol</h2>
+        <div class="flex gap-2">
+          <input id="wl-symbol" type="text" placeholder="e.g. AAPL, MSFT, NIFTY50" style="width:auto;flex:1" />
+          <input id="wl-notes"  type="text" placeholder="Notes (optional)" style="width:auto;flex:1" />
+          <button onclick="addWatchlist()" class="btn-primary">Add</button>
+        </div>
+      </div>
+
+      <!-- Watchlist Table -->
+      <div class="card overflow-x-auto">
+        ${state.watchlist.length === 0 ? '<p class="text-sm text-gray-400 text-center py-4">No symbols in watchlist. Add one above.</p>' : `
+        <table class="w-full">
+          <thead><tr>
+            <th>Symbol</th><th>Name</th><th class="text-right">Price</th><th class="text-right">Change %</th>
+            <th class="text-right">Open</th><th class="text-right">High</th><th class="text-right">Low</th>
+            <th class="text-right">Holding</th><th>Notes</th><th></th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`}
+      </div>
+    </div>`;
+}
+
+async function fetchWatchlistPrices() {
+  _watchlistLoading = true;
+  renderWatchlist();
+  try {
+    const r = await apiGet('getWatchlistPrices');
+    if (r.success) { _watchlistPrices = r.data; toast('Prices updated'); }
+    else toast(r.error || 'Failed to fetch prices', 'error');
+  } catch(e) { toast('Price fetch error: ' + e.message, 'error'); }
+  _watchlistLoading = false;
+  renderWatchlist();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  MODAL INFRASTRUCTURE
+// ─────────────────────────────────────────────────────────────────────────────
+function openModal(html) {
+  document.getElementById('modal-box').innerHTML = html;
+  document.getElementById('modal-overlay').classList.remove('hidden');
+  // Focus first input
+  setTimeout(() => { const f = document.querySelector('#modal-box input, #modal-box select'); if (f) f.focus(); }, 50);
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+  document.getElementById('modal-box').innerHTML = '';
+}
+
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+});
+
+function modalFooter(submitLabel, submitFn, loading = false) {
+  return `
+    <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-100">
+      <button onclick="closeModal()" class="btn-gray">Cancel</button>
+      <button onclick="${submitFn}" class="btn-primary flex items-center gap-1.5" ${loading?'disabled':''}>
+        ${loading ? '<span class="spinner"></span>' : ''}${submitLabel}
+      </button>
+    </div>`;
+}
+
+function modalHeader(title) {
+  return `<div class="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
+    <h3 class="font-semibold text-gray-800">${title}</h3>
+    <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-lg font-bold">×</button>
+  </div>`;
+}
+
+function fieldRow(label, input) {
+  return `<div class="mb-3"><label class="form-label">${label}</label>${input}</div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ACCOUNT MODAL
+// ─────────────────────────────────────────────────────────────────────────────
+function openAccountModal() {
+  openModal(`
+    <div class="p-5">
+      ${modalHeader('👤 New Account Profile')}
+      ${fieldRow('Account Name', '<input id="m-acc-name" type="text" placeholder="e.g. Me, Wife, Parent"/>')}
+      ${modalFooter('Create Account', 'submitAccount()')}
+    </div>`);
+}
+
+async function submitAccount() {
+  const name = document.getElementById('m-acc-name').value.trim();
+  if (!name) { toast('Name required', 'error'); return; }
+  try {
+    const r = await apiPost({ action: 'createAccount', name });
+    if (!r.success) throw new Error(r.error);
+    state.accounts.push(r.data);
+    closeModal();
+    toast('Account created');
+    renderSetup();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  BROKER MODAL
+// ─────────────────────────────────────────────────────────────────────────────
+function openBrokerModal() {
+  const accOpts = state.accounts.map(a => `<option value="${escHtml(a.id)}">${escHtml(a.name)}</option>`).join('');
+  openModal(`
+    <div class="p-5">
+      ${modalHeader('🏦 Add Broker / Platform')}
+      ${fieldRow('Account', `<select id="m-brk-acc">${accOpts}</select>`)}
+      ${fieldRow('Broker Name', '<input id="m-brk-name" type="text" placeholder="e.g. Robinhood, Zerodha, Schwab"/>')}
+      ${fieldRow('Currency', `<select id="m-brk-cur"><option value="USD">USD ($)</option><option value="INR">INR (₹)</option></select>`)}
+      ${modalFooter('Add Broker', 'submitBroker()')}
+    </div>`);
+}
+
+async function submitBroker() {
+  const account_id = document.getElementById('m-brk-acc').value;
+  const name       = document.getElementById('m-brk-name').value.trim();
+  const currency   = document.getElementById('m-brk-cur').value;
+  if (!name) { toast('Broker name required', 'error'); return; }
+  try {
+    const r = await apiPost({ action: 'createBroker', account_id, name, currency });
+    if (!r.success) throw new Error(r.error);
+    state.brokers.push(r.data);
+    state.cash.push({ id: '_tmp', broker_id: r.data.id, balance: 0 });
+    closeModal();
+    toast('Broker added');
+    renderSetup();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  SET CASH MODAL
+// ─────────────────────────────────────────────────────────────────────────────
+function openSetCashModal(brokerId) {
+  const b = getBroker(brokerId);
+  const current = getCash(brokerId);
+  openModal(`
+    <div class="p-5">
+      ${modalHeader(`💰 Set Cash Balance — ${escHtml(b?.name||'')}`)}
+      <p class="text-xs text-gray-500 mb-3">Current balance: ${fmt(current, b?.currency||'USD')}</p>
+      ${fieldRow(`New Balance (${b?.currency||'USD'})`, `<input id="m-cash-bal" type="number" step="0.01" value="${current}" />`)}
+      <input type="hidden" id="m-cash-broker" value="${escHtml(brokerId)}" />
+      ${modalFooter('Set Balance', 'submitSetCash()')}
+    </div>`);
+}
+
+async function submitSetCash() {
+  const broker_id = document.getElementById('m-cash-broker').value;
+  const balance   = parseFloat(document.getElementById('m-cash-bal').value);
+  if (isNaN(balance)) { toast('Invalid amount', 'error'); return; }
+  try {
+    const r = await apiPost({ action: 'setCash', broker_id, balance });
+    if (!r.success) throw new Error(r.error);
+    const idx = state.cash.findIndex(c => c.broker_id === broker_id);
+    if (idx >= 0) state.cash[idx].balance = balance; else state.cash.push({ id: '_tmp', broker_id, balance });
+    closeModal();
+    toast('Cash balance updated');
+    renderCurrentTab();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  HOLDING MODAL
+// ─────────────────────────────────────────────────────────────────────────────
+function openHoldingModal() {
+  const brkOpts = state.brokers.map(b => {
+    const acc = getAccount(b.account_id);
+    return `<option value="${escHtml(b.id)}">${escHtml(acc?.name||'?')} — ${escHtml(b.name)} (${b.currency})</option>`;
+  }).join('');
+  openModal(`
+    <div class="p-5">
+      ${modalHeader('📦 Add Initial Holding')}
+      <p class="text-xs text-gray-500 mb-3">For seeding pre-existing positions. Ongoing purchases should go through Orders.</p>
+      ${fieldRow('Broker', `<select id="m-hld-broker">${brkOpts}</select>`)}
+      ${fieldRow('Symbol / Ticker', '<input id="m-hld-sym" type="text" placeholder="e.g. AAPL, NIFTY, Gold"/>')}
+      ${fieldRow('Quantity', '<input id="m-hld-qty" type="number" step="0.0001" min="0.0001" placeholder="e.g. 10"/>')}
+      ${fieldRow('Average Cost Per Share', '<input id="m-hld-avg" type="number" step="0.01" min="0" placeholder="e.g. 150.00"/>')}
+      ${modalFooter('Add Holding', 'submitHolding()')}
+    </div>`);
+}
+
+async function submitHolding() {
+  const broker_id = document.getElementById('m-hld-broker').value;
+  const symbol    = document.getElementById('m-hld-sym').value.trim().toUpperCase();
+  const quantity  = parseFloat(document.getElementById('m-hld-qty').value);
+  const avg_cost  = parseFloat(document.getElementById('m-hld-avg').value);
+  if (!symbol)         { toast('Symbol required', 'error'); return; }
+  if (isNaN(quantity)) { toast('Quantity required', 'error'); return; }
+  if (isNaN(avg_cost)) { toast('Average cost required', 'error'); return; }
+  try {
+    const r = await apiPost({ action: 'addHolding', broker_id, symbol, quantity, avg_cost });
+    if (!r.success) throw new Error(r.error);
+    await loadAll();
+    closeModal();
+    toast('Holding added');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  PIGGY BANK MODAL
+// ─────────────────────────────────────────────────────────────────────────────
+function openPiggyBankModal() {
+  openModal(`
+    <div class="p-5">
+      ${modalHeader('🐷 New Piggy Bank / Goal')}
+      ${fieldRow('Goal Name', '<input id="m-pb-name" type="text" placeholder="e.g. Goa Trip, Shivya\'s Wedding, Retirement"/>')}
+      ${fieldRow('Description (optional)', '<input id="m-pb-desc" type="text" placeholder="Brief description"/>')}
+      ${fieldRow('Currency', `<select id="m-pb-cur"><option value="USD">USD ($)</option><option value="INR">INR (₹)</option></select>`)}
+      ${fieldRow('Goal Amount (0 = no goal)', '<input id="m-pb-goal" type="number" step="0.01" min="0" value="0"/>')}
+      ${modalFooter('Create Piggy Bank', 'submitPiggyBank()')}
+    </div>`);
+}
+
+async function submitPiggyBank() {
+  const name        = document.getElementById('m-pb-name').value.trim();
+  const description = document.getElementById('m-pb-desc').value.trim();
+  const currency    = document.getElementById('m-pb-cur').value;
+  const goal_amount = parseFloat(document.getElementById('m-pb-goal').value) || 0;
+  if (!name) { toast('Name required', 'error'); return; }
+  try {
+    const r = await apiPost({ action: 'createPiggyBank', name, description, currency, goal_amount });
+    if (!r.success) throw new Error(r.error);
+    state.piggyBanks.push(r.data);
+    closeModal();
+    toast('Piggy Bank created');
+    renderCurrentTab();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ALLOCATE STOCK TO PIGGY BANK MODAL
+// ─────────────────────────────────────────────────────────────────────────────
+function openAllocModal(pbId) {
+  const pb = getPB(pbId);
+  if (!pb) return;
+
+  // Build list of all held symbols with availability
+  const holdingOptions = state.holdings.map(h => {
+    const b = getBroker(h.broker_id);
+    const acc = b ? getAccount(b.account_id) : null;
+    const totalAlloc = allocatedQty(h.broker_id, h.symbol, null);
+    const available = parseFloat(h.quantity) - totalAlloc;
+    const curAlloc = state.goalAllocs.find(a => a.piggy_bank_id===pbId && a.broker_id===h.broker_id && a.symbol===h.symbol);
+    return { h, b, acc, available: available + (curAlloc ? parseFloat(curAlloc.quantity) : 0), curAlloc };
+  });
+
+  const hOpts = holdingOptions.map((item, i) => {
+    const label = `${item.h.symbol} — ${item.acc?.name||'?'}/${item.b?.name||'?'} (have ${fmtN(item.h.quantity,4)}, avail ${fmtN(item.available,4)})`;
+    return `<option value="${i}">${escHtml(label)}</option>`;
+  });
+
+  openModal(`
+    <div class="p-5">
+      ${modalHeader(`🐷 Allocate Stock to "${escHtml(pb.name)}"`)}
+      <input type="hidden" id="m-alloc-pbid" value="${escHtml(pbId)}" />
+      ${holdingOptions.length === 0 ? '<p class="text-sm text-gray-500 py-4 text-center">No holdings to allocate. Add holdings first.</p>' : `
+        ${fieldRow('Select Holding', `<select id="m-alloc-hld" onchange="updateAllocAvail()">${hOpts.join('')}</select>`)}
+        <p class="text-xs text-gray-500 mb-2" id="m-alloc-avail-label"></p>
+        ${fieldRow('Quantity to Allocate', '<input id="m-alloc-qty" type="number" step="0.0001" min="0" placeholder="0"/>')}
+        <p class="text-xs text-gray-400">Set to 0 to remove existing allocation.</p>
+      `}
+      ${holdingOptions.length > 0 ? modalFooter('Save Allocation', 'submitAlloc()') : modalFooter('Close', 'closeModal()')}
+    </div>`);
+
+  // Store holding options data for JS access
+  window._allocHoldingOptions = holdingOptions;
+  updateAllocAvail();
+}
+
+function updateAllocAvail() {
+  const sel = document.getElementById('m-alloc-hld');
+  const lbl = document.getElementById('m-alloc-avail-label');
+  const qty = document.getElementById('m-alloc-qty');
+  if (!sel || !lbl || !window._allocHoldingOptions) return;
+  const item = window._allocHoldingOptions[parseInt(sel.value)];
+  if (!item) return;
+  lbl.textContent = `Available for this bank: ${fmtN(item.available, 4)} shares`;
+  if (item.curAlloc) {
+    qty.value = item.curAlloc.quantity;
+    qty.placeholder = 'Current: ' + item.curAlloc.quantity;
+  } else {
+    qty.value = '';
+  }
+}
+
+async function submitAlloc() {
+  const pbId = document.getElementById('m-alloc-pbid').value;
+  const idx  = parseInt(document.getElementById('m-alloc-hld').value);
+  const qty  = parseFloat(document.getElementById('m-alloc-qty').value) || 0;
+  const item = window._allocHoldingOptions[idx];
+  if (!item) return;
+  if (qty > item.available + 0.00001) { toast(`Cannot allocate more than available (${fmtN(item.available,4)})`, 'error'); return; }
+  try {
+    const r = await apiPost({
+      action: 'setGoalAlloc',
+      piggy_bank_id: pbId,
+      broker_id: item.h.broker_id,
+      symbol: item.h.symbol,
+      quantity: qty,
+    });
+    if (!r.success) throw new Error(r.error);
+    await loadAll();
+    closeModal();
+    toast('Allocation saved');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ORDER MODAL
+// ─────────────────────────────────────────────────────────────────────────────
+function openOrderModal(prefill = {}) {
+  const accOpts = state.accounts.map(a =>
+    `<option value="${escHtml(a.id)}" ${prefill.account_id===a.id?'selected':''}>${escHtml(a.name)}</option>`).join('');
+  const brkOpts = state.brokers.map(b => {
+    const acc = getAccount(b.account_id);
+    return `<option value="${escHtml(b.id)}" ${prefill.broker_id===b.id?'selected':''}>${escHtml(acc?.name||'?')} — ${escHtml(b.name)} (${b.currency})</option>`;
+  }).join('');
+  const pbOpts = ['<option value="">None (no piggy bank)</option>',
+    ...state.piggyBanks.map(p => `<option value="${escHtml(p.id)}" ${prefill.piggy_bank_id===p.id?'selected':''}>${escHtml(p.name)}</option>`)].join('');
+
+  openModal(`
+    <div class="p-5">
+      ${modalHeader(prefill._bookStock ? '📖 Book Stock (Quick Buy)' : '📋 New Order')}
+      <div class="grid grid-cols-2 gap-3">
+        <div>${fieldRow('Account', `<select id="m-ord-acc">${accOpts}</select>`)}</div>
+        <div>${fieldRow('Broker', `<select id="m-ord-brk">${brkOpts}</select>`)}</div>
+        <div>${fieldRow('Symbol', `<input id="m-ord-sym" type="text" placeholder="AAPL" value="${escHtml(prefill.symbol||'')}"/>`)} </div>
+        <div>${fieldRow('Order Type', `<select id="m-ord-type"><option value="BUY" ${prefill.order_type==='BUY'||!prefill.order_type?'selected':''}>BUY</option><option value="SELL" ${prefill.order_type==='SELL'?'selected':''}>SELL</option></select>`)}</div>
+        <div>${fieldRow('Execution Type', `<select id="m-ord-exec"><option value="Market">Market</option><option value="Limit">Limit</option></select>`)}</div>
+        <div>${fieldRow('Tax Term', `<select id="m-ord-tax"><option value="">—</option><option value="Short-Term">Short-Term</option><option value="Long-Term">Long-Term</option></select>`)}</div>
+        <div>${fieldRow('Quantity', `<input id="m-ord-qty" type="number" step="0.0001" min="0.0001" placeholder="10" value="${escHtml(prefill.quantity||'')}"/>`)}</div>
+        <div>${fieldRow('Price per Unit', `<input id="m-ord-price" type="number" step="0.01" min="0" placeholder="150.00" value="${escHtml(prefill.price||'')}"/>`)}</div>
+        <div>${fieldRow('Fees / Tax', `<input id="m-ord-fees" type="number" step="0.01" min="0" placeholder="0.00" value="0"/>`)}</div>
+        <div>${fieldRow('Tag to Piggy Bank (BUY)', `<select id="m-ord-pb">${pbOpts}</select>`)}</div>
+      </div>
+      ${fieldRow('Notes (optional)', '<input id="m-ord-notes" type="text" placeholder="Optional note"/>')}
+      <div id="m-ord-calc" class="text-xs text-gray-500 mt-1 mb-3"></div>
+      ${modalFooter('Place Order', 'submitOrder()')}
+    </div>`);
+
+  // Live net total preview
+  ['m-ord-qty','m-ord-price','m-ord-fees','m-ord-type'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', previewOrderTotal);
+    document.getElementById(id)?.addEventListener('change', previewOrderTotal);
+  });
+}
+
+function previewOrderTotal() {
+  const qty  = parseFloat(document.getElementById('m-ord-qty')?.value) || 0;
+  const prc  = parseFloat(document.getElementById('m-ord-price')?.value) || 0;
+  const fees = parseFloat(document.getElementById('m-ord-fees')?.value) || 0;
+  const type = document.getElementById('m-ord-type')?.value;
+  const net  = type === 'BUY' ? (qty * prc) + fees : (qty * prc) - fees;
+  const el   = document.getElementById('m-ord-calc');
+  if (el) el.textContent = qty && prc ? `Net Total: $${Math.abs(net).toFixed(2)}` : '';
+}
+
+async function submitOrder() {
+  const account_id   = document.getElementById('m-ord-acc').value;
+  const broker_id    = document.getElementById('m-ord-brk').value;
+  const symbol       = document.getElementById('m-ord-sym').value.trim().toUpperCase();
+  const order_type   = document.getElementById('m-ord-type').value;
+  const exec_type    = document.getElementById('m-ord-exec').value;
+  const quantity     = parseFloat(document.getElementById('m-ord-qty').value);
+  const price        = parseFloat(document.getElementById('m-ord-price').value);
+  const fees         = parseFloat(document.getElementById('m-ord-fees').value) || 0;
+  const tax_term     = document.getElementById('m-ord-tax').value;
+  const piggy_bank_id= document.getElementById('m-ord-pb').value;
+  const notes        = document.getElementById('m-ord-notes').value.trim();
+
+  if (!symbol)         { toast('Symbol required', 'error'); return; }
+  if (isNaN(quantity)) { toast('Quantity required', 'error'); return; }
+  if (isNaN(price))    { toast('Price required', 'error'); return; }
+
+  try {
+    const r = await apiPost({ action: 'placeOrder', account_id, broker_id, symbol, order_type, exec_type, quantity, price, fees, tax_term, piggy_bank_id, notes });
+    if (!r.success) throw new Error(r.error);
+    state.orders.push(r.data);
+    closeModal();
+    toast(`${order_type} order placed for ${symbol}`);
+    renderOrders();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  FULFILL ORDER
+// ─────────────────────────────────────────────────────────────────────────────
+async function fulfillOrder(orderId) {
+  const order = state.orders.find(o => o.id === orderId);
+  if (!order) return;
+
+  if (order.order_type === 'SELL') {
+    // Check for piggy bank allocations
+    const allocs = state.goalAllocs.filter(a => a.broker_id === order.broker_id && a.symbol === order.symbol);
+    if (allocs.length > 0) {
+      openFulfillSellModal(order, allocs);
+      return;
+    }
+  }
+
+  // BUY or SELL with no allocations — fulfill directly
+  try {
+    const r = await apiPost({ action: 'fulfillOrder', id: orderId, piggy_bank_deductions: [] });
+    if (!r.success) throw new Error(r.error);
+    await loadAll();
+    toast('Order fulfilled');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function openFulfillSellModal(order, allocs) {
+  const brk = getBroker(order.broker_id);
+  const totalQty = parseFloat(order.quantity);
+
+  const allocRows = allocs.map(a => {
+    const pb = getPB(a.piggy_bank_id);
+    return `
+      <div class="flex items-center gap-3 mb-2">
+        <span class="text-sm font-medium text-gray-700 flex-1">🐷 ${escHtml(pb?.name||a.piggy_bank_id)}</span>
+        <span class="text-xs text-gray-400">Allocated: ${fmtN(a.quantity,4)}</span>
+        <input id="ded-${escHtml(a.piggy_bank_id)}" type="number" step="0.0001" min="0"
+          value="${Math.min(parseFloat(a.quantity), totalQty).toFixed(4)}"
+          class="w-24 text-right" style="border:1px solid #d1d5db;border-radius:.375rem;padding:.25rem .5rem;font-size:.875rem;"
+          onchange="updateDedTotal()"
+        />
+      </div>`;
+  }).join('');
+
+  openModal(`
+    <div class="p-5">
+      ${modalHeader(`✓ Fulfill SELL — ${escHtml(order.symbol)}`)}
+      <p class="text-sm text-gray-600 mb-1">Selling <strong>${fmtN(order.quantity,4)} shares</strong> at ${fmt(order.price, brk?.currency||'USD')}.</p>
+      <p class="text-sm text-gray-600 mb-4">This stock has piggy bank allocations. Specify how many shares to deduct from each bank:</p>
+      ${allocRows}
+      <p class="text-xs mt-2 mb-1">Sold: <strong>${fmtN(totalQty,4)}</strong> shares &nbsp;|&nbsp; Deducted: <strong id="ded-total">0</strong></p>
+      <p class="text-xs text-gray-400">Shares not accounted for are removed from unallocated holding. You don't need to sum to exactly the sold quantity.</p>
+      <input type="hidden" id="m-fulfill-ordid" value="${escHtml(order.id)}" />
+      <input type="hidden" id="m-fulfill-allocs" value='${escHtml(JSON.stringify(allocs.map(a=>a.piggy_bank_id)))}' />
+      ${modalFooter('Confirm Fulfill', 'submitFulfillSell()')}
+    </div>`);
+
+  updateDedTotal();
+}
+
+function updateDedTotal() {
+  const allocIds = JSON.parse(document.getElementById('m-fulfill-allocs')?.value || '[]');
+  let total = 0;
+  allocIds.forEach(pbId => { total += parseFloat(document.getElementById('ded-'+pbId)?.value || 0); });
+  const el = document.getElementById('ded-total');
+  if (el) el.textContent = fmtN(total, 4);
+}
+
+async function submitFulfillSell() {
+  const orderId  = document.getElementById('m-fulfill-ordid').value;
+  const allocIds = JSON.parse(document.getElementById('m-fulfill-allocs').value || '[]');
+  const deductions = allocIds.map(pbId => ({
+    piggy_bank_id: pbId,
+    quantity: parseFloat(document.getElementById('ded-'+pbId)?.value || 0)
+  })).filter(d => d.quantity > 0);
+
+  try {
+    const r = await apiPost({ action: 'fulfillOrder', id: orderId, piggy_bank_deductions: deductions });
+    if (!r.success) throw new Error(r.error);
+    await loadAll();
+    closeModal();
+    toast('SELL order fulfilled');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  BOOK STOCK QUICK ACTION
+// ─────────────────────────────────────────────────────────────────────────────
+function openBookStockModal(orderId) {
+  const order = state.orders.find(o => o.id === orderId);
+  if (!order) return;
+  openOrderModal({
+    account_id: order.account_id,
+    broker_id:  order.broker_id,
+    symbol:     order.symbol,
+    order_type: 'BUY',
+    _bookStock: true,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  CANCEL / DELETE ACTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+async function cancelOrder(orderId) {
+  if (!confirm('Cancel this order?')) return;
+  try {
+    const r = await apiPost({ action: 'cancelOrder', id: orderId });
+    if (!r.success) throw new Error(r.error);
+    const o = state.orders.find(x => x.id === orderId);
+    if (o) o.status = 'Cancelled';
+    toast('Order cancelled');
+    renderOrders();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteOrder(orderId) {
+  if (!confirm('Permanently delete this order?')) return;
+  try {
+    const r = await apiPost({ action: 'deleteOrder', id: orderId });
+    if (!r.success) throw new Error(r.error);
+    state.orders = state.orders.filter(o => o.id !== orderId);
+    toast('Order deleted');
+    renderOrders();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteAccount(id) {
+  if (!confirm('Delete this account?')) return;
+  try {
+    const r = await apiPost({ action: 'deleteAccount', id });
+    if (!r.success) throw new Error(r.error);
+    state.accounts = state.accounts.filter(a => a.id !== id);
+    toast('Account deleted');
+    renderSetup();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteBroker(id) {
+  if (!confirm('Delete this broker and its cash record?')) return;
+  try {
+    const r = await apiPost({ action: 'deleteBroker', id });
+    if (!r.success) throw new Error(r.error);
+    state.brokers = state.brokers.filter(b => b.id !== id);
+    state.cash    = state.cash.filter(c => c.broker_id !== id);
+    toast('Broker deleted');
+    renderSetup();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteHolding(id) {
+  if (!confirm('Remove this holding?')) return;
+  try {
+    const r = await apiPost({ action: 'removeHolding', id });
+    if (!r.success) throw new Error(r.error);
+    state.holdings = state.holdings.filter(h => h.id !== id);
+    toast('Holding removed');
+    renderSetup();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deletePiggyBank(id) {
+  if (!confirm('Delete this piggy bank and all its allocations?')) return;
+  try {
+    const r = await apiPost({ action: 'deletePiggyBank', id });
+    if (!r.success) throw new Error(r.error);
+    state.piggyBanks = state.piggyBanks.filter(p => p.id !== id);
+    state.goalAllocs = state.goalAllocs.filter(a => a.piggy_bank_id !== id);
+    toast('Piggy Bank deleted');
+    renderCurrentTab();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  WATCHLIST ACTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+async function addWatchlist() {
+  const symbol = document.getElementById('wl-symbol').value.trim().toUpperCase();
+  const notes  = document.getElementById('wl-notes').value.trim();
+  if (!symbol) { toast('Symbol required', 'error'); return; }
+  try {
+    const r = await apiPost({ action: 'addWatchlist', symbol, notes });
+    if (!r.success) throw new Error(r.error);
+    state.watchlist.push(r.data);
+    document.getElementById('wl-symbol').value = '';
+    document.getElementById('wl-notes').value = '';
+    toast(`${symbol} added to watchlist`);
+    renderWatchlist();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function removeWatchlist(id) {
+  try {
+    const r = await apiPost({ action: 'removeWatchlist', id });
+    if (!r.success) throw new Error(r.error);
+    state.watchlist = state.watchlist.filter(w => w.id !== id);
+    toast('Removed from watchlist');
+    renderWatchlist();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  INITIALIZATION
+// ─────────────────────────────────────────────────────────────────────────────
+function init() {
+  updateGasStatusIndicator();
+  if (!gasUrlConfigured()) {
+    document.getElementById('config-banner').classList.remove('hidden');
+    switchTab('dashboard');
+    return;
+  }
+  switchTab('dashboard');
+  loadAll().then(() => {
+    if (state.holdings.length > 0) setTimeout(loadPrices, 1000);
+  });
+}
+
+init();
+</script>
+</body>
+</html>

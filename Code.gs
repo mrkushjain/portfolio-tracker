@@ -500,12 +500,14 @@ function _fetchPrices(symbols) {
     sc.getRange(i + 1, 4).setFormula(`=IFERROR(GOOGLEFINANCE("${sym}","priceopen"),"")`);
     sc.getRange(i + 1, 5).setFormula(`=IFERROR(GOOGLEFINANCE("${sym}","high"),"")`);
     sc.getRange(i + 1, 6).setFormula(`=IFERROR(GOOGLEFINANCE("${sym}","low"),"")`);
+    sc.getRange(i + 1, 7).setFormula(`=IFERROR(GOOGLEFINANCE("${sym}","high52"),"")`);
+    sc.getRange(i + 1, 8).setFormula(`=IFERROR(GOOGLEFINANCE("${sym}","low52"),"")`);
   });
   SpreadsheetApp.flush();
   Utilities.sleep(2500); // allow GOOGLEFINANCE to resolve
 
-  const vals = sc.getRange(1, 1, symbols.length, 6).getValues();
-  sc.getRange(1, 1, symbols.length, 6).clearContent();
+  const vals = sc.getRange(1, 1, symbols.length, 8).getValues();
+  sc.getRange(1, 1, symbols.length, 8).clearContent();
 
   const out = {};
   symbols.forEach((s, i) => {
@@ -516,6 +518,8 @@ function _fetchPrices(symbols) {
       open:       typeof vals[i][3] === 'number' ? vals[i][3] : null,
       high:       typeof vals[i][4] === 'number' ? vals[i][4] : null,
       low:        typeof vals[i][5] === 'number' ? vals[i][5] : null,
+      high52:     typeof vals[i][6] === 'number' ? vals[i][6] : null,
+      low52:      typeof vals[i][7] === 'number' ? vals[i][7] : null,
     };
   });
   return out;

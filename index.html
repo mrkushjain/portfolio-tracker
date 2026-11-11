@@ -844,8 +844,10 @@ function renderWatchlist() {
         <td class="text-right font-semibold">${hasPrice ? '$'+fmtN(p.price) : '<span class="text-gray-400">—</span>'}</td>
         <td class="text-right ${changeCls}">${hasPrice ? fmtPct(p.change_pct) : '—'}</td>
         <td class="text-right text-xs text-gray-400">${hasPrice && p.open ? '$'+fmtN(p.open) : '—'}</td>
-        <td class="text-right text-xs text-gray-400">${hasPrice && p.high ? '$'+fmtN(p.high) : '—'}</td>
-        <td class="text-right text-xs text-gray-400">${hasPrice && p.low  ? '$'+fmtN(p.low)  : '—'}</td>
+        <td class="text-right text-xs text-gray-400">${hasPrice && p.high    ? '$'+fmtN(p.high)    : '—'}</td>
+        <td class="text-right text-xs text-gray-400">${hasPrice && p.low     ? '$'+fmtN(p.low)     : '—'}</td>
+        <td class="text-right text-xs font-medium ${hasPrice && p.high52 ? 'text-red-500' : 'text-gray-400'}">${hasPrice && p.high52 ? '$'+fmtN(p.high52) : '—'}</td>
+        <td class="text-right text-xs font-medium ${hasPrice && p.low52  ? 'text-green-600' : 'text-gray-400'}">${hasPrice && p.low52  ? '$'+fmtN(p.low52)  : '—'}</td>
         <td class="text-right">${myHolding ? `<span class="text-xs font-semibold text-indigo-600">${fmtN(myHolding.quantity,4)} shares</span>` : '<span class="text-gray-300 text-xs">—</span>'}</td>
         <td class="text-xs text-gray-400">${escHtml(w.notes||'')}</td>
         <td><button onclick="removeWatchlist('${escHtml(w.id)}')" class="btn-danger">✕</button></td>
@@ -878,6 +880,7 @@ function renderWatchlist() {
           <thead><tr>
             <th>Symbol</th><th>Name</th><th class="text-right">Price</th><th class="text-right">Change %</th>
             <th class="text-right">Open</th><th class="text-right">High</th><th class="text-right">Low</th>
+            <th class="text-right">52W High</th><th class="text-right">52W Low</th>
             <th class="text-right">Holding</th><th>Notes</th><th></th>
           </tr></thead>
           <tbody>${rows}</tbody>

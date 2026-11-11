@@ -649,6 +649,7 @@ function renderSetup() {
       <td class="text-xs text-gray-500">${escHtml(acc?.name||'?')} / ${escHtml(b?.name||'?')}</td>
       <td class="text-right">${fmtN(h.quantity, 4)}</td>
       <td class="text-right">${fmt(h.avg_cost, b?.currency||'USD')}</td>
+      <td class="text-xs text-gray-500">${h.trade_date ? escHtml(h.trade_date) : '—'}</td>
       <td><button onclick="deleteHolding('${escHtml(h.id)}')" class="btn-danger">✕</button></td>
     </tr>`;
   }).join('');
@@ -709,7 +710,7 @@ function renderSetup() {
         <p class="text-xs text-gray-500 mb-3">Use this to seed pre-existing positions. For ongoing trades, use the Orders tab.</p>
         ${state.holdings.length === 0 ? '<p class="text-sm text-gray-400 text-center py-4">No holdings recorded.</p>' : `
         <table class="w-full">
-          <thead><tr><th>Symbol</th><th>Broker</th><th class="text-right">Qty</th><th class="text-right">Avg Cost</th><th></th></tr></thead>
+          <thead><tr><th>Symbol</th><th>Broker</th><th class="text-right">Qty</th><th class="text-right">Avg Cost</th><th>Trade Date</th><th></th></tr></thead>
           <tbody>${holdingRows}</tbody>
         </table>`}
       </div>
@@ -1044,20 +1045,22 @@ function openHoldingModal() {
       ${fieldRow('Symbol / Ticker', '<input id="m-hld-sym" type="text" placeholder="e.g. AAPL, NIFTY, Gold"/>')}
       ${fieldRow('Quantity', '<input id="m-hld-qty" type="number" step="0.0001" min="0.0001" placeholder="e.g. 10"/>')}
       ${fieldRow('Average Cost Per Share', '<input id="m-hld-avg" type="number" step="0.01" min="0" placeholder="e.g. 150.00"/>')}
+      ${fieldRow('Trade Date', `<input id="m-hld-date" type="date" value="${new Date().toISOString().slice(0,10)}"/>`)}
       ${modalFooter('Add Holding', 'submitHolding()')}
     </div>`);
 }
 
 async function submitHolding() {
-  const broker_id = document.getElementById('m-hld-broker').value;
-  const symbol    = document.getElementById('m-hld-sym').value.trim().toUpperCase();
-  const quantity  = parseFloat(document.getElementById('m-hld-qty').value);
-  const avg_cost  = parseFloat(document.getElementById('m-hld-avg').value);
+  const broker_id  = document.getElementById('m-hld-broker').value;
+  const symbol     = document.getElementById('m-hld-sym').value.trim().toUpperCase();
+  const quantity   = parseFloat(document.getElementById('m-hld-qty').value);
+  const avg_cost   = parseFloat(document.getElementById('m-hld-avg').value);
+  const trade_date = document.getElementById('m-hld-date').value;
   if (!symbol)         { toast('Symbol required', 'error'); return; }
   if (isNaN(quantity)) { toast('Quantity required', 'error'); return; }
   if (isNaN(avg_cost)) { toast('Average cost required', 'error'); return; }
   try {
-    const r = await apiPost({ action: 'addHolding', broker_id, symbol, quantity, avg_cost });
+    const r = await apiPost({ action: 'addHolding', broker_id, symbol, quantity, avg_cost, trade_date });
     if (!r.success) throw new Error(r.error);
     await loadAll();
     closeModal();

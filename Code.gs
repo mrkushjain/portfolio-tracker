@@ -8,7 +8,7 @@ const SHEET_DEF = {
   ACCOUNTS:    { name: 'Accounts',         headers: ['id','name','created_at'] },
   BROKERS:     { name: 'Brokers',          headers: ['id','account_id','name','currency','created_at'] },
   CASH:        { name: 'Cash_Balances',    headers: ['id','broker_id','balance','updated_at'] },
-  HOLDINGS:    { name: 'Holdings',         headers: ['id','broker_id','symbol','quantity','avg_cost','updated_at'] },
+  HOLDINGS:    { name: 'Holdings',         headers: ['id','broker_id','symbol','quantity','avg_cost','trade_date','updated_at'] },
   PIGGY_BANKS: { name: 'Piggy_Banks',      headers: ['id','name','goal_amount','currency','description','created_at'] },
   GOAL_ALLOCS: { name: 'Goal_Allocations', headers: ['id','piggy_bank_id','broker_id','symbol','quantity','updated_at'] },
   ORDERS:      { name: 'Orders',           headers: ['id','account_id','broker_id','symbol','order_type','exec_type',
@@ -261,16 +261,21 @@ function addHolding(d) {
   const avg = parseFloat(d.avg_cost) || 0;
   if (qty <= 0) return { success: false, error: 'quantity must be > 0' };
 
+  const tradeDate = d.trade_date || '';
   const ex = rows('HOLDINGS').find(h => h.broker_id === d.broker_id && h.symbol === sym);
   if (ex) {
     const eqty = parseFloat(ex.quantity) || 0;
     const eavg = parseFloat(ex.avg_cost) || 0;
     const nqty = eqty + qty;
     const navg = ((eqty * eavg) + (qty * avg)) / nqty;
-    updateRow('HOLDINGS', ex.id, { quantity: nqty, avg_cost: navg, updated_at: nowISO() });
-    return { success: true, data: { id: ex.id, quantity: nqty, avg_cost: navg } };
+    // keep earliest trade_date when merging
+    const keepDate = ex.trade_date && tradeDate
+      ? (ex.trade_date < tradeDate ? ex.trade_date : tradeDate)
+      : (ex.trade_date || tradeDate);
+    updateRow('HOLDINGS', ex.id, { quantity: nqty, avg_cost: navg, trade_date: keepDate, updated_at: nowISO() });
+    return { success: true, data: { id: ex.id, quantity: nqty, avg_cost: navg, trade_date: keepDate } };
   }
-  const rec = { id: generateId(), broker_id: d.broker_id, symbol: sym, quantity: qty, avg_cost: avg, updated_at: nowISO() };
+  const rec = { id: generateId(), broker_id: d.broker_id, symbol: sym, quantity: qty, avg_cost: avg, trade_date: tradeDate, updated_at: nowISO() };
   appendRow('HOLDINGS', rec);
   return { success: true, data: rec };
 }
